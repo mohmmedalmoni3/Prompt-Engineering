@@ -145,13 +145,6 @@ function setCookie(name: string, value: string, days: number) {
   document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
 }
 
-function getCookie(name: string): string | undefined {
-  const match = document.cookie
-    .split('; ')
-    .find((row) => row.startsWith(name + '='));
-  return match ? decodeURIComponent(match.split('=')[1]) : undefined;
-}
-
 // -------------------------------------------------------------------
 // Component
 // -------------------------------------------------------------------
@@ -165,26 +158,46 @@ export default function RegisterForm() {
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
   const deviceId = typeof window !== 'undefined' ? getDeviceId() : '';
 
-  // Check whether registration is currently open
+  // Check whether this device is REALLY registered (server-authoritative),
+  // so stale localStorage/cookie markers don't block the form.
   useEffect(() => {
-    // If this device already registered, block the form.
-    // Two independent markers (cookie + localStorage) — harder for visitors to clear.
-    const localLocked = (() => {
+    let cancelled = false;
+
+    (async () => {
       try {
-        return localStorage.getItem('pe_registered') === '1';
+        const res = await fetch(`/api/device-status?h=${encodeURIComponent(deviceId)}`);
+        const data = await res.json().catch(() => null);
+        if (!cancelled && data?.registered === true) {
+          setAlreadyRegistered(true);
+          return;
+        }
       } catch {
-        return false;
+        /* ignore */
+      }
+
+      // Not registered server-side — clear any stale local markers
+      try {
+        localStorage.removeItem('pe_registered');
+
+        const expires = new Date(Date.now() - 864e5).toUTCString();
+        document.cookie = `pe_registered=; expires=${expires}; path=/; SameSite=Lax`;
+      } catch {
+        /* ignore */
+      }
+
+      if (!cancelled) {
+        setAlreadyRegistered(false);
+        fetch('/api/settings')
+          .then((res) => res.json())
+          .then((data) => setIsOpen(data.open !== false))
+          .catch(() => setIsOpen(true));
       }
     })();
-    const cookieLocked = getCookie('pe_registered') === '1';
 
-    if (localLocked || cookieLocked) setAlreadyRegistered(true);
-
-    fetch('/api/settings')
-      .then((res) => res.json())
-      .then((data) => setIsOpen(data.open !== false))
-      .catch(() => setIsOpen(true));
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [deviceId]);
 
   function set<K extends keyof FormValues>(key: K, val: FormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: val }));
