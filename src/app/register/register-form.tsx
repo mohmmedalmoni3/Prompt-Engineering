@@ -125,9 +125,17 @@ export default function RegisterForm() {
   const [state, setState] = useState<FormState>('idle');
   const [serverError, setServerError] = useState('');
   const [isOpen, setIsOpen] = useState<boolean | null>(null);
+  const [alreadyRegistered, setAlreadyRegistered] = useState(false);
 
   // Check whether registration is currently open
   useEffect(() => {
+    // If this device already registered, block the form
+    try {
+      if (localStorage.getItem('pe_registered') === '1') setAlreadyRegistered(true);
+    } catch {
+      /* ignore */
+    }
+
     fetch('/api/settings')
       .then((res) => res.json())
       .then((data) => setIsOpen(data.open !== false))
@@ -190,6 +198,12 @@ export default function RegisterForm() {
       }
 
       setState('success');
+      // Lock this device so it can't register again
+      try {
+        localStorage.setItem('pe_registered', '1');
+      } catch {
+        /* ignore */
+      }
     } catch {
       setServerError('تحقق من اتصال الإنترنت وحاول مرة أخرى');
       setState('error');
@@ -263,6 +277,33 @@ export default function RegisterForm() {
   // -----------------------------------------------------------------
   // Form
   // -----------------------------------------------------------------
+
+  // This device already registered — block the form
+  if (alreadyRegistered) {
+    return (
+      <div className='relative mx-auto w-full max-w-md overflow-hidden rounded-3xl border border-emerald-500/25 bg-[#0c0f1e]/80 p-8 pt-9 text-center shadow-2xl shadow-black/40 backdrop-blur-xl'>
+        <div className='relative mx-auto mb-6 flex h-16 w-16 items-center justify-center'>
+          <div className='absolute inset-0 rounded-2xl bg-emerald-500/15 blur-xl' />
+          <div className='relative flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/20 to-emerald-600/5'>
+            <svg className='h-8 w-8 text-emerald-300' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
+              <path d='M20 6 9 17l-5-5' />
+            </svg>
+          </div>
+        </div>
+
+        <h2 className='mb-2 text-xl font-extrabold text-white'>تم تسجيلك من هذا الجهاز</h2>
+        <p className='mx-auto mb-7 max-w-sm text-sm leading-relaxed text-white/60'>
+          سجّلت بالفعل في ورشة{' '}
+          <span className='font-bold text-emerald-300'>Prompt Engineering</span> من هذا
+          الجهاز. سنتواصل معك عبر البريد للتفاصيل الكاملة.
+        </p>
+
+        <p className='inline-block rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-6 py-2.5 text-xs font-semibold text-emerald-300'>
+          ✓ مسجّل بنجاح
+        </p>
+      </div>
+    );
+  }
 
   // Registration closed — show a notice instead of the form
   if (isOpen === false) {

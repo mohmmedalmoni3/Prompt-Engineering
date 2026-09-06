@@ -36,6 +36,10 @@ export async function POST(request: NextRequest) {
   }
 
   const { fullName, email, phone, city, field, experience, motivation } = parsed.data;
+  // Normalize phone for duplicate checks: 0791234567, 962791234567, +962791234567 → 962791234567
+  const normalizedPhone = phone.startsWith('0')
+    ? '962' + phone.slice(1)
+    : phone.replace(/^\+/, '');
 
   try {
     const setting = await sql`SELECT value FROM settings WHERE key = 'registration_open'`;
@@ -57,9 +61,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Same phone number can only register once (checks normalized form)
+    const phoneExists =
+      await sql`SELECT id FROM registrations WHERE phone = ${phone} OR phone = ${normalizedPhone}`;
+
+    if ((phoneExists as { id: number }[]).length > 0) {
+      return NextResponse.json(
+        { error: 'هذا الرقم مسجّل مسبقاً في الورشة' },
+        { status: 409 }
+      );
+    }
+
     const rows = await sql`
       INSERT INTO registrations (full_name, email, phone, city, field, experience, motivation)
-      VALUES (${fullName}, ${email}, ${phone}, ${city}, ${field}, ${experience}, ${motivation})
+      VALUES (${fullName}, ${email}, ${normalizedPhone}, ${city}, ${field}, ${experience}, ${motivation})
       RETURNING id, created_at
     `;
 
