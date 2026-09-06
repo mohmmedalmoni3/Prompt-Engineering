@@ -1,0 +1,38 @@
+# ============================================================
+# Render Blueprint — PROMPT ENGINEERING workshop registration
+#
+# Deploy:
+#   1. Push this repo to GitHub/GitLab
+#   2. In Render: New → Blueprint → connect the repo
+#   3. Set the env vars below in the Render dashboard
+#      (they can live at environment-group level, shared by all services)
+#   4. Run db/schema.sql in your Neon SQL editor FIRST
+# ============================================================
+
+services:
+  - type: web
+    name: prompt-engineering-workshop
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /register
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false # set manually in Render dashboard
+      - key: SESSION_SECRET
+        sync: false # set manually — generate with node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD_HASH
+        sync: false # set manually — the scrypt hash of your admin password (see env example)
+      # Clerk (existing dashboard auth) — optional on Render
+      - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      # Sentry — optional
+      - key: NEXT_PUBLIC_SENTRY_DISABLED
+        sync: false
