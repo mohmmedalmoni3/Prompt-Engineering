@@ -60,7 +60,7 @@ async function main() {
       await sql.query(statement);
     }
 
-    console.log('Database ready! Tables created: registrations');
+    console.log('Database ready! Tables created: registrations, settings');
   } catch (err) {
     console.error('Failed to set up the database:');
     console.error(err);
