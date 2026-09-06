@@ -116,6 +116,43 @@ function validate(v: FormValues): Errors {
 }
 
 // -------------------------------------------------------------------
+// Device helpers — identify this device so it can register only once
+// -------------------------------------------------------------------
+
+function getDeviceId(): string {
+  const raw = [
+    navigator.userAgent,
+    navigator.platform ?? '',
+    navigator.language,
+    String(screen.width) + 'x' + String(screen.height),
+    String(screen.availWidth) + 'x' + String(screen.availHeight),
+    String(screen.colorDepth),
+    String(navigator.hardwareConcurrency ?? ''),
+    Intl.DateTimeFormat().resolvedOptions().timeZone
+  ].join('|');
+
+  let hash = 0;
+  for (let i = 0; i < raw.length; i++) {
+    hash = (hash << 5) - hash + raw.charCodeAt(i);
+    hash |= 0;
+  }
+  // Return two variants so same-browser users on identical phones rarely collide
+  return 'd' + Math.abs(hash).toString(36) + Math.abs(hash ^ 0x5bd1e995).toString(36);
+}
+
+function setCookie(name: string, value: string, days: number) {
+  const expires = new Date(Date.now() + days * 864e5).toUTCString();
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+}
+
+function getCookie(name: string): string | undefined {
+  const match = document.cookie
+    .split('; ')
+    .find((row) => row.startsWith(name + '='));
+  return match ? decodeURIComponent(match.split('=')[1]) : undefined;
+}
+
+// -------------------------------------------------------------------
 // Component
 // -------------------------------------------------------------------
 
@@ -126,15 +163,22 @@ export default function RegisterForm() {
   const [serverError, setServerError] = useState('');
   const [isOpen, setIsOpen] = useState<boolean | null>(null);
   const [alreadyRegistered, setAlreadyRegistered] = useState(false);
+  const deviceId = typeof window !== 'undefined' ? getDeviceId() : '';
 
   // Check whether registration is currently open
   useEffect(() => {
-    // If this device already registered, block the form
-    try {
-      if (localStorage.getItem('pe_registered') === '1') setAlreadyRegistered(true);
-    } catch {
-      /* ignore */
-    }
+    // If this device already registered, block the form.
+    // Two independent markers (cookie + localStorage) — harder for visitors to clear.
+    const localLocked = (() => {
+      try {
+        return localStorage.getItem('pe_registered') === '1';
+      } catch {
+        return false;
+      }
+    })();
+    const cookieLocked = getCookie('pe_registered') === '1';
+
+    if (localLocked || cookieLocked) setAlreadyRegistered(true);
 
     fetch('/api/settings')
       .then((res) => res.json())
@@ -174,7 +218,8 @@ export default function RegisterForm() {
           city: values.city.trim(),
           field: values.field,
           experience: values.experience,
-          motivation: values.motivation.trim()
+          motivation: values.motivation.trim(),
+          deviceHash: deviceId
         })
       });
 
@@ -201,6 +246,7 @@ export default function RegisterForm() {
       // Lock this device so it can't register again
       try {
         localStorage.setItem('pe_registered', '1');
+        setCookie('pe_registered', '1', 365);
       } catch {
         /* ignore */
       }

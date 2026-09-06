@@ -16,7 +16,8 @@ const registerSchema = z.object({
   city: z.string().trim().min(2, 'المحافظة مطلوبة').max(60),
   field: z.string().trim().min(2, 'المجال مطلوب').max(60),
   experience: z.enum(['beginner', 'intermediate', 'advanced']),
-  motivation: z.string().trim().max(500).optional().default('')
+  motivation: z.string().trim().max(500).optional().default(''),
+  deviceHash: z.string().trim().min(1).max(100).optional().default('')
 });
 
 export async function POST(request: NextRequest) {
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 422 });
   }
 
-  const { fullName, email, phone, city, field, experience, motivation } = parsed.data;
+  const { fullName, email, phone, city, field, experience, motivation, deviceHash } = parsed.data;
   // Normalize phone for duplicate checks: 0791234567, 962791234567, +962791234567 → 962791234567
   const normalizedPhone = phone.startsWith('0')
     ? '962' + phone.slice(1)
@@ -72,9 +73,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Same device can only register once (regardless of the data used)
+    if (deviceHash) {
+      const deviceExists = await sql`SELECT id FROM registrations WHERE device_hash = ${deviceHash}`;
+
+      if ((deviceExists as { id: number }[]).length > 0) {
+        return NextResponse.json(
+          { error: 'تم التسجيل من هذا الجهاز مسبقاً' },
+          { status: 409 }
+        );
+      }
+    }
+
     const rows = await sql`
-      INSERT INTO registrations (full_name, email, phone, city, field, experience, motivation)
-      VALUES (${fullName}, ${email}, ${normalizedPhone}, ${city}, ${field}, ${experience}, ${motivation})
+      INSERT INTO registrations (full_name, email, phone, city, field, experience, motivation, device_hash)
+      VALUES (${fullName}, ${email}, ${normalizedPhone}, ${city}, ${field}, ${experience}, ${motivation}, ${deviceHash})
       RETURNING id, created_at
     `;
 

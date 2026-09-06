@@ -13,12 +13,14 @@ CREATE TABLE IF NOT EXISTS registrations (
   experience TEXT NOT NULL CHECK (experience IN ('beginner', 'intermediate', 'advanced')),
   motivation TEXT DEFAULT '',
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'waitlist')),
+  device_hash TEXT DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_registrations_email ON registrations (email);
 CREATE INDEX IF NOT EXISTS idx_registrations_created_at ON registrations (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_registrations_city ON registrations (city);
+CREATE INDEX IF NOT EXISTS idx_registrations_device ON registrations (device_hash);
 
 -- ============================================================
 -- Workshop settings — e.g. open/close registration from admin
